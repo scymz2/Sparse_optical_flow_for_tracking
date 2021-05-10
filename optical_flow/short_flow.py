@@ -6,10 +6,10 @@ import math
 
 NUM_OF_FEATURE_POINTS = 3000  # Number of key points
 COLOR = (0, 255, 0)  # Green
-VIDEO_PATH = 'test_video3.mp4'  # File path of the video
+VIDEO_PATH = 'test_video1.mp4'  # File path of the video
 THICKNESS = 1
 SIZE = (1600, 900)
-TRACK_LENGTH = 15
+TRACK_LENGTH = 20
 TRACKS = []
 
 # Parameters for lucas kanade optical flow
@@ -19,11 +19,7 @@ lk_params = dict(winSize=(15, 15),
 
 
 def extract_vector(KeyPoints):
-    temp_array = np.zeros((NUM_OF_FEATURE_POINTS, 1, 2), dtype='float32')
-    for i in range(len(KeyPoints) - 1):
-        temp_array[i][0][0] = KeyPoints[i].pt[0]
-        temp_array[i][0][1] = KeyPoints[i].pt[1]
-    return temp_array
+    return np.float32([point.pt for point in KeyPoints]).reshape(-1, 1, 2)
 
 
 def display_video(frame):
@@ -77,39 +73,36 @@ if __name__ == '__main__':
         # Generate the gray level image for the current frame
         c_gray = cv2.cvtColor(c_frame, cv2.COLOR_BGR2GRAY)
 
-        
-        # p_kp = np.float32([tr[-1] for tr in TRACKS]).reshape(-1, 1, 2)
-
         # Calculate the optical flow
         c_kp, status, err = cv2.calcOpticalFlowPyrLK(p_gray, c_gray, p_kp, None, **lk_params)
 
-        # sift out the feature points that optical flow exists
-        c_tracked_kp = c_kp[status == 1]
-        p_tracked_kp = p_kp[status == 1]
+        new_tracks = []
+        for i, (tr, cur, pre, flag) in enumerate(zip(TRACKS, c_kp, p_kp, status)):
 
-        k = 0
-        for i, (cur, pre) in enumerate(zip(c_tracked_kp, p_tracked_kp)):
+            if not flag == 1:
+                continue
+
             x_cur, y_cur = cur.ravel()
             x_pre, y_pre = pre.ravel()
             dist = calculateDist(x_cur, y_cur, x_pre, y_pre)
 
-            # if the displacement > 0.3, it is not a  point
-            if dist > 0.3:
-                c_tracked_kp[k] = c_tracked_kp[i]
-                p_tracked_kp[k] = p_tracked_kp[i]
-                k = k + 1
+            # 如果位移小于0.3也不符合
+            if dist < 0.3:
+                continue
 
-        c_tracked_kp = c_tracked_kp[:k]
-        p_tracked_kp = p_tracked_kp[:k]
+            #保存符合的点
+            tr.append((x_cur, y_cur))
 
-        # 绘制跟踪线
-        for (cur, pre) in zip(c_tracked_kp, p_tracked_kp):
-            x_cur, y_cur = cur.ravel()
-            x_pre, y_pre = pre.ravel()
-            mask = cv2.line(mask, (x_cur, y_cur), (x_pre, y_pre), COLOR, THICKNESS)
-            img = cv2.circle(img, (x_cur, y_cur), 3, COLOR, -1)
+            if len(tr) > TRACK_LENGTH:
+                del tr[0]
 
-        img = cv2.add(img, mask)
+            new_tracks.append(tr)
+            cv2.circle(img, (x_cur, y_cur), 2, COLOR, -1)
+
+        TRACKS = new_tracks
+
+        cv2.polylines(img, [np.int32(tr) for tr in TRACKS], False, COLOR, 1)
+
 
         # Resize the window and display video
         display_video(img)
@@ -120,7 +113,8 @@ if __name__ == '__main__':
 
         # Update the frames and feature points
         p_gray = c_gray.copy()
-        p_kp = c_tracked_kp.reshape(-1, 1, 2)
+        p_kp = np.float32([tr[-1] for tr in TRACKS]).reshape(-1, 1, 2)
+
 
     cv2.destroyAllWindows()
     cap.release()

@@ -7,7 +7,7 @@ import math
 
 NUM_OF_FEATURE_POINTS = 3000  # Number of key points
 COLOR = (0, 255, 0)  # Green
-VIDEO_PATH = 'test_video2.mp4'  # File path of the video
+VIDEO_PATH = 'test_video1.mp4'  # File path of the video
 THICKNESS = 1
 SIZE = (1600, 900)
 ITERATION = 0
@@ -19,11 +19,7 @@ lk_params = dict(winSize=(15, 15),
 
 
 def extract_vector(KeyPoints):
-    temp_array = np.zeros((len(KeyPoints), 1, 2), dtype='float32')
-    for i in range(len(KeyPoints)):
-        temp_array[i][0][0] = KeyPoints[i].pt[0]
-        temp_array[i][0][1] = KeyPoints[i].pt[1]
-    return temp_array
+    return np.float32([point.pt for point in KeyPoints]).reshape(-1, 1, 2)
 
 
 def display_video(frame):
@@ -32,26 +28,12 @@ def display_video(frame):
     cv2.imshow('frame', frame)
 
 
-def removeKeyPointNotInBox(keypoint):
-    temp = np.zeros((1, 1, 2), dtype='float32')
-    for i in range(len(keypoint)):
-        position_x = keypoint[i][0][0]
-        position_y = keypoint[i][0][1]
-        if ((position_x > box[0]) & (position_x < (box[0] + box[2])) & (position_y > box[1]) & (
-                position_y < (box[1] + box[3]))):
-            temp = np.append(temp, [keypoint[i]], axis=0)
-
-    temp = np.delete(temp, 0, axis=0)
-    return temp
-
-
 def calculateDist(x1, y1, x2, y2):
     delta_x = abs(x2-x1)
     delta_y = abs(y2-y1)
     len = math.sqrt((delta_x**2)+(delta_y**2))
 
     return len
-
 
 
 if __name__ == '__main__':
@@ -131,11 +113,15 @@ if __name__ == '__main__':
             _, p_frame = cap.read()
             p_gray = cv2.cvtColor(p_frame, cv2.COLOR_BGR2GRAY)
 
+            #
+            temp_frame = p_gray[box[1]:(box[1] + box[3]), box[0]:(box[0] + box[2])]
+            #cv2.imwrite('frame1.jpg', temp_frame)
+
             # 找到老图的所有特征点
-            pre_kp = sift.detect(p_gray)
+            pre_kp = sift.detect(temp_frame)
             pre_kp = extract_vector(pre_kp)
 
-            pre_kp = removeKeyPointNotInBox(pre_kp)
+            pre_kp = np.float32([(kp[0][0] + box[0], kp[0][1] + box[1]) for kp in pre_kp]).reshape(-1, 1, 2)
 
             # 创建蒙版
             mask = np.zeros_like(img)

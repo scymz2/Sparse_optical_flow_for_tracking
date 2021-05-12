@@ -10,7 +10,7 @@ COLOR = (0, 255, 0)  # Green
 VIDEO_PATH = 'test_video1.mp4'  # File path of the video
 THICKNESS = 1
 SIZE = (1600, 900)
-ITERATION = 0
+POINTS = []
 
 # Parameters for lucas kanade optical flow
 lk_params = dict(winSize=(15, 15),
@@ -23,35 +23,29 @@ def extract_vector(KeyPoints):
 
 
 def display_video(frame):
-    cv2.namedWindow("frame", 0)
     cv2.resizeWindow("frame", SIZE[0], SIZE[1])
     cv2.imshow('frame', frame)
 
 
 def calculateDist(x1, y1, x2, y2):
-    delta_x = abs(x2-x1)
-    delta_y = abs(y2-y1)
-    len = math.sqrt((delta_x**2)+(delta_y**2))
+    delta_x = abs(x2 - x1)
+    delta_y = abs(y2 - y1)
+    return math.sqrt((delta_x ** 2) + (delta_y ** 2))
 
-    return len
 
 
 if __name__ == '__main__':
 
     cap = cv2.VideoCapture(VIDEO_PATH)
+    cv2.namedWindow("frame", 0)
     box = [0, 0, 0, 0]
     sift = cv2.SIFT_create(nfeatures=NUM_OF_FEATURE_POINTS, sigma=4.0)
-
-    # 设置一个数组记录轨迹
-    tracks = []
-
 
     while True:
         # 读取新的一帧 并转化为灰度图像
         ret, c_frame = cap.read()
         if not ret:
             break
-
 
         c_gray = cv2.cvtColor(c_frame, cv2.COLOR_BGR2GRAY)
 
@@ -78,11 +72,11 @@ if __name__ == '__main__':
                 x_cur, y_cur = cur.ravel()
                 x_pre, y_pre = pre.ravel()
                 dist = calculateDist(x_cur, y_cur, x_pre, y_pre)
-                #如果距离大于1，就不是静止点
+                # 如果距离大于1，就不是静止点
                 if dist > 0.2:
                     cur_tracked[k] = cur_tracked[i]
                     pre_tracked[k] = pre_tracked[i]
-                    k = k+1
+                    k = k + 1
 
             cur_tracked = cur_tracked[:k]
             pre_tracked = pre_tracked[:k]
@@ -100,7 +94,6 @@ if __name__ == '__main__':
             p_gray = c_gray.copy()
             pre_kp = cur_tracked.reshape(-1, 1, 2)
 
-
         # display video
         display_video(img)
 
@@ -115,7 +108,7 @@ if __name__ == '__main__':
 
             #
             temp_frame = p_gray[box[1]:(box[1] + box[3]), box[0]:(box[0] + box[2])]
-            #cv2.imwrite('frame1.jpg', temp_frame)
+            # cv2.imwrite('frame1.jpg', temp_frame)
 
             # 找到老图的所有特征点
             pre_kp = sift.detect(temp_frame)
@@ -126,25 +119,12 @@ if __name__ == '__main__':
             # 创建蒙版
             mask = np.zeros_like(img)
 
+        elif key == ord(" "):
+            cv2.waitKey(0)
+
         elif key == ord("q"):
             break
 
-        # iteration ++
-        ITERATION += 1
 
     cv2.destroyAllWindows()
     cap.release()
-
-
-
-
-
-
-
-
-
-
-
-
-
-

@@ -54,7 +54,7 @@ if __name__ == '__main__':
     # Create a mask image for drawing optical flow lines
     mask = np.zeros_like(p_frame)
 
-    while cap.isOpened():
+    while True:
         ret, c_frame = cap.read()
         # If there is no frame left, quit
         if not ret:
@@ -73,8 +73,6 @@ if __name__ == '__main__':
         for (cur, pre) in zip(c_tracked_kp, p_tracked_kp):
             x_cur, y_cur = cur.ravel()
             x_pre, y_pre = pre.ravel()
-            if ITERATION % 20 == 0:
-                mask = np.zeros_like(c_frame)
             mask = cv2.line(mask, (x_cur, y_cur), (x_pre, y_pre), COLOR, THICKNESS)
         img = cv2.add(c_frame, mask)
 

@@ -9,7 +9,7 @@ COLOR = (0, 255, 0)  # Green
 VIDEO_PATH = 'test_video1.mp4'  # File path of the video
 THICKNESS = 1
 SIZE = (1600, 900)
-TRACK_LENGTH = 20
+TRACK_LENGTH = 25
 TRACKS = []
 
 # Parameters for lucas kanade optical flow
@@ -31,10 +31,31 @@ def display_video(frame):
 def calculateDist(x1, y1, x2, y2):
     delta_x = abs(x2 - x1)
     delta_y = abs(y2 - y1)
-    len = math.sqrt((delta_x ** 2) + (delta_y ** 2))
+    return  math.sqrt((delta_x ** 2) + (delta_y ** 2))
 
-    return len
 
+def draw_min_rectangle(image, contours):
+    image = np.copy(image)
+    for con in contours:
+        min_rect = cv2.minAreaRect(con)
+        box = cv2.boxPoints(min_rect)
+        min_rect = np.int0(box)
+        cv2.drawContours(image, [min_rect], 0, COLOR, 1)
+    return image
+
+def process_img(img):
+    img = np.copy(img)
+    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)    # Convert to gray image
+    gray = cv2.equalizeHist(gray)                   # Enhance contrast ratio
+    black = fgbg.apply(gray)                        # Subtract background
+    img = cv2.medianBlur(black, 5)                  # Median filter
+    img = cv2.GaussianBlur(img, (5, 5), 75)         # Gaussian filter
+    return img
+
+def get_contours(img):
+    _, binary = cv2.threshold(img, 127, 255, cv2.THRESH_BINARY)
+    contours, hierarchy = cv2.findContours(binary, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+    return contours
 
 if __name__ == '__main__':
 
@@ -44,9 +65,14 @@ if __name__ == '__main__':
 
     # Generate the gray level image for the first frame
     p_gray = cv2.cvtColor(p_frame, cv2.COLOR_BGR2GRAY)
+    p_gray = cv2.GaussianBlur(p_gray, (5, 5), 75)
 
-    # Initialize sift
+    #p_gray = cv2.GaussianBlur(p_gray, (5, 5), 75)
+
+
+    # Initialize sift and background subtractor
     sift = cv2.SIFT_create(nfeatures=NUM_OF_FEATURE_POINTS, sigma=3.0)
+    fgbg = cv2.createBackgroundSubtractorMOG2()
 
     # Find the feature point
     p_kp = sift.detect(p_gray, None)
@@ -67,11 +93,13 @@ if __name__ == '__main__':
         ret, c_frame = cap.read()
 
         img = c_frame
+        mask = np.zeros_like(c_frame)
         # If there is no frame left, quit
         if not ret:
             break
         # Generate the gray level image for the current frame
         c_gray = cv2.cvtColor(c_frame, cv2.COLOR_BGR2GRAY)
+        c_gray = cv2.GaussianBlur(c_gray, (5, 5), 75)
 
         # Calculate the optical flow
         c_kp, status, err = cv2.calcOpticalFlowPyrLK(p_gray, c_gray, p_kp, None, **lk_params)
@@ -97,12 +125,17 @@ if __name__ == '__main__':
                 del tr[0]
 
             new_tracks.append(tr)
-            cv2.circle(img, (x_cur, y_cur), 2, COLOR, -1)
+            cv2.circle(mask, (x_cur, y_cur), 2, COLOR, -1)
 
         TRACKS = new_tracks
 
-        cv2.polylines(img, [np.int32(tr) for tr in TRACKS], False, COLOR, 1)
+        cv2.polylines(mask, [np.int32(tr) for tr in TRACKS], False, COLOR, 1)
 
+        # 计算移动物体
+        new_img = process_img(img)
+        cons = get_contours(new_img)
+        img = draw_min_rectangle(img, cons)
+        img = cv2.add(img, mask)
 
         # Resize the window and display video
         display_video(img)

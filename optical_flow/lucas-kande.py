@@ -3,7 +3,9 @@
 import cv2
 import numpy as np
 
-cap = cv2.VideoCapture(0)
+VIDEO_PATH = 'test_video1.mp4'
+
+cap = cv2.VideoCapture(VIDEO_PATH)
 
 # Create old frame
 _, frame = cap.read()

@@ -4,13 +4,12 @@ import numpy as np
 import cv2
 import math
 
-NUM_OF_FEATURE_POINTS = 3000  # Number of key points
 COLOR = (0, 255, 0)  # Green
-VIDEO_PATH = 'test_video1.mp4'  # File path of the video
 THICKNESS = 1
 SIZE = (1600, 900)
-TRACK_LENGTH = 25
+TRACK_LENGTH = 20
 TRACKS = []
+fgbg = cv2.createBackgroundSubtractorMOG2()
 
 # Parameters for lucas kanade optical flow
 lk_params = dict(winSize=(15, 15),
@@ -31,7 +30,7 @@ def display_video(frame):
 def calculateDist(x1, y1, x2, y2):
     delta_x = abs(x2 - x1)
     delta_y = abs(y2 - y1)
-    return  math.sqrt((delta_x ** 2) + (delta_y ** 2))
+    return math.sqrt((delta_x ** 2) + (delta_y ** 2))
 
 
 def draw_min_rectangle(image, contours):
@@ -46,22 +45,32 @@ def draw_min_rectangle(image, contours):
 def process_img(img):
     img = np.copy(img)
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)    # Convert to gray image
-    gray = cv2.equalizeHist(gray)                   # Enhance contrast ratio
+    # gray = cv2.equalizeHist(gray)                   # Enhance contrast ratio
     black = fgbg.apply(gray)                        # Subtract background
     img = cv2.medianBlur(black, 5)                  # Median filter
     img = cv2.GaussianBlur(img, (5, 5), 75)         # Gaussian filter
     return img
+
 
 def get_contours(img):
     _, binary = cv2.threshold(img, 127, 255, cv2.THRESH_BINARY)
     contours, hierarchy = cv2.findContours(binary, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
     return contours
 
-if __name__ == '__main__':
+
+def run_moving_objects(VIDEO_PATH, NUM_OF_FEATURE_POINTS):
+    global TRACKS
 
     # Read video
     cap = cv2.VideoCapture(VIDEO_PATH)
     _, p_frame = cap.read()
+
+    # Init video writer
+    width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+    height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    fps = cap.get(cv2.CAP_PROP_FPS)
+    fourcc = cv2.VideoWriter_fourcc('M', 'P', '4', '2')
+    outVideo = cv2.VideoWriter('trackMoving.avi', fourcc, fps, (width, height))
 
     # Generate the gray level image for the first frame
     p_gray = cv2.cvtColor(p_frame, cv2.COLOR_BGR2GRAY)
@@ -71,8 +80,7 @@ if __name__ == '__main__':
 
 
     # Initialize sift and background subtractor
-    sift = cv2.SIFT_create(nfeatures=NUM_OF_FEATURE_POINTS, sigma=3.0)
-    fgbg = cv2.createBackgroundSubtractorMOG2()
+    sift = cv2.SIFT_create(nfeatures=NUM_OF_FEATURE_POINTS, sigma=1.3)
 
     # Find the feature point
     p_kp = sift.detect(p_gray, None)
@@ -85,10 +93,6 @@ if __name__ == '__main__':
         for (x, y) in np.float32(p_kp).reshape(-1, 2):
             TRACKS.append([(x, y)])
 
-
-    # Create a mask image for drawing optical flow lines
-    mask = np.zeros_like(p_frame)
-
     while True:
         ret, c_frame = cap.read()
 
@@ -96,6 +100,7 @@ if __name__ == '__main__':
         mask = np.zeros_like(c_frame)
         # If there is no frame left, quit
         if not ret:
+            TRACKS.clear()
             break
         # Generate the gray level image for the current frame
         c_gray = cv2.cvtColor(c_frame, cv2.COLOR_BGR2GRAY)
@@ -114,11 +119,11 @@ if __name__ == '__main__':
             x_pre, y_pre = pre.ravel()
             dist = calculateDist(x_cur, y_cur, x_pre, y_pre)
 
-            # 如果位移小于0.3也不符合
+            # If the displacement less than 0.3, ignore it
             if dist < 0.3:
                 continue
 
-            #保存符合的点
+            # Store the points that satisfied the requirements
             tr.append((x_cur, y_cur))
 
             if len(tr) > TRACK_LENGTH:
@@ -131,7 +136,7 @@ if __name__ == '__main__':
 
         cv2.polylines(mask, [np.int32(tr) for tr in TRACKS], False, COLOR, 1)
 
-        # 计算移动物体
+        # capture the moving objects
         new_img = process_img(img)
         cons = get_contours(new_img)
         img = draw_min_rectangle(img, cons)
@@ -139,9 +144,11 @@ if __name__ == '__main__':
 
         # Resize the window and display video
         display_video(img)
+        outVideo.write(img)
 
         # Set the key to stop the process
         if cv2.waitKey(1) & 0xFF == ord('q'):
+            TRACKS.clear()
             break
 
         # Update the frames and feature points
